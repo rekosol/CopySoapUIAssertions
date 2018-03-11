@@ -13,3 +13,4 @@ In the context menu of teststeps you will find the menu point “Copy Assertions
 
 ## Software is tested with: 
 * SoapUI 5.4.0
+* SoapUI 5.3.0 with Java 1.7
