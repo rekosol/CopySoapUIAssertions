@@ -37,7 +37,7 @@ import com.eviware.soapui.model.project.Project;
 import com.eviware.soapui.model.testsuite.TestCase;
 import com.eviware.soapui.model.testsuite.TestStep;
 import com.eviware.soapui.model.testsuite.TestSuite;
-import com.eviware.soapui.impl.wsdl.teststeps.WsdlTestRequestStep;
+import com.eviware.soapui.impl.wsdl.teststeps.*;
  
 
 
@@ -127,11 +127,11 @@ class TeststepModel extends DefaultComboBoxModel<String>{
 	 */
 	private static final long serialVersionUID = -5836960328325111150L;
 	
-	public TeststepModel( String project, String testsuite, String testcase, Workspace ws )  {    
-		loadModel( project, testsuite, testcase, ws );  
+	public TeststepModel( String project, String testsuite, String testcase, Workspace ws, String fl )  {    
+		loadModel( project, testsuite, testcase, ws , fl );  
 	}  
  
-	public void loadModel( String project, String testsuite, String testcase, Workspace ws )  {    
+	public void loadModel( String project, String testsuite, String testcase, Workspace ws, String flavour )  {    
 		if( getSize() > 0 )    
 		{      
 			removeAllElements();    
@@ -139,11 +139,16 @@ class TeststepModel extends DefaultComboBoxModel<String>{
 		
 		TestCase theTestCase = ws.getProjectByName(project).getTestSuiteByName(testsuite).getTestCaseByName(testcase);
 		if( theTestCase != null)
-		{
+		{   
+			addElement("*" ); 			
 			for( int i = 0; i < theTestCase.getTestStepList().size(); ++i )    
 			{   			
-				if (theTestCase.getTestStepList().get(i) instanceof WsdlTestRequestStep)
-					addElement( theTestCase.getTestStepList().get(i).getName() ); 				
+				if (theTestCase.getTestStepList().get(i) instanceof WsdlTestRequestStep && flavour == "W")
+					addElement( theTestCase.getTestStepList().get(i).getName() );
+				if (theTestCase.getTestStepList().get(i) instanceof RestTestRequestStep && flavour == "R")
+					addElement( theTestCase.getTestStepList().get(i).getName() );
+				if (theTestCase.getTestStepList().get(i) instanceof HttpTestRequestStep && flavour == "H")
+					addElement( theTestCase.getTestStepList().get(i).getName() );
 			} 
 		}		
 	} 
@@ -173,7 +178,7 @@ class AssertionModel extends DefaultComboBoxModel<String>{
 			for( int i = 0; i < theTeststep.getChildren().size(); ++i )    
 			{   
 					addElement( theTeststep.getChildren().get(i).getName() );    
-			} 
+			} 			
 		}		
 	} 
 } 
@@ -206,21 +211,28 @@ public class CopyAssertion extends JPanel {
 	private String sourceTestcase;
 	private String sourceTeststep;	
 	private String sourceAssertion;
+	private String flavour = "";
 	
 	private TextField ergebnis = new TextField("-");
 	
 	public CopyAssertion(ModelItem mi)   {    
 		
-		if ( !(mi instanceof WsdlTestRequestStep)) {
+		if( mi instanceof WsdlTestRequestStep)
+			flavour = "W";
+		if( mi instanceof HttpTestRequestStep)
+			flavour = "H";
+		if( mi instanceof RestTestRequestStep)
+			flavour = "R";
+				
+		if ( flavour == "") {
 			setLayout(new GridBagLayout());
 			GridBagConstraints c = new GridBagConstraints();
 			c.fill = GridBagConstraints.HORIZONTAL;
 			c.gridx = 0;		c.gridy = 0;		add(new Label("Information:"),c);		
-			c.gridx = 1;		c.gridy = 0;		add(new Label("Copy only works with WSDLRequests!"),c);
+			c.gridx = 1;		c.gridy = 0;		add(new Label("Copy only works with WSDL/REST/HTTP-Requests!"),c);
 			return;
 		}
-			
-		
+				
 		theWorkspace = mi.getProject().getWorkspace();
 		
 		sourceProject =  mi.getProject().getName();
@@ -230,7 +242,7 @@ public class CopyAssertion extends JPanel {
 		sourceTestcase = mi.getParent().getName();
 		targetTestcase = sourceTestcase;
 		sourceTeststep = mi.getName();
-		targetTeststep = sourceTeststep;
+		targetTeststep = "*";
 		sourceAssertioncb = new JComboBox<String>( new AssertionModel(sourceProject, sourceTestsuite, sourceTestcase, sourceTeststep, theWorkspace ) );
 				
 		DefaultComboBoxModel<String> cbmProject = new ProjectModel(theWorkspace.getProjectList() );    		
@@ -241,10 +253,7 @@ public class CopyAssertion extends JPanel {
 		testsuitecb.setSelectedItem(sourceTestsuite);
 		testcasecb = new JComboBox<String>( new TestcaseModel(sourceProject, sourceTestsuite, theWorkspace ) );
 		testcasecb.setSelectedItem(sourceTestcase);
-		teststepcb = new JComboBox<String>( new TeststepModel(sourceProject, sourceTestsuite, sourceTestcase, theWorkspace ) );
-		
-		
-		
+		teststepcb = new JComboBox<String>( new TeststepModel(sourceProject, sourceTestsuite, sourceTestcase, theWorkspace, flavour) );
 		
 		projectcb.addActionListener( new ActionListener()       
 		{        
@@ -289,15 +298,15 @@ public class CopyAssertion extends JPanel {
 				targetTestcase = (String)cb.getSelectedItem();
 				if( targetTestcase != null)
 				{
-					TeststepModel tcModel = (TeststepModel)teststepcb.getModel();				
-					tcModel.loadModel( targetProject, targetTestsuite, targetTestcase, theWorkspace );
+					TeststepModel tsModel = (TeststepModel)teststepcb.getModel();				
+					tsModel.loadModel( targetProject, targetTestsuite, targetTestcase, theWorkspace, flavour );
 				}
 				else
 				{
 					targetTestcase = (String) testcasecb.getModel().getElementAt(0);
-					TeststepModel tcModel = (TeststepModel)teststepcb.getModel();
+					TeststepModel tsModel = (TeststepModel)teststepcb.getModel();
 					if( targetTestcase != null)
-						tcModel.loadModel( targetProject, targetTestsuite, targetTestcase, theWorkspace );
+						tsModel.loadModel( targetProject, targetTestsuite, targetTestcase, theWorkspace, flavour);
 				}
 			}
 		}); 
@@ -314,15 +323,101 @@ public class CopyAssertion extends JPanel {
 		}); 
 
 		
+		Button button = new Button("Copy");
+		button.addActionListener(new ActionListener() 
+		{
+			public void actionPerformed(ActionEvent e)         
+			{
+				TestStep testStepSrc =  theWorkspace.getProjectByName(sourceProject).getTestSuiteByName(sourceTestsuite).getTestCaseByName(sourceTestcase).getTestStepByName(sourceTeststep); 	
+				
+				int counter = 0;
+				switch (flavour) { 
+					case "W":
+						counter = ((WsdlTestRequestStep)testStepSrc).getAssertionList().size(); break;
+					case "R":
+						counter = ((RestTestRequestStep)testStepSrc).getAssertionList().size(); break;
+					case "H":
+						counter = ((HttpTestRequestStep)testStepSrc).getAssertionList().size(); break;
+				}
+				
+								
+				for (int count = 0; count < counter; count++) {
+					String assertion = "";
+					switch (flavour) { 
+						case "W":
+							assertion = ((WsdlTestRequestStep)testStepSrc).getAssertionAt(count).getName(); break;					
+						case "R": 
+							assertion = ((RestTestRequestStep)testStepSrc).getAssertionAt(count).getName(); break;
+						case "H":
+							assertion = ((HttpTestRequestStep)testStepSrc).getAssertionAt(count).getName(); break;
+					}
+					if ( assertion.equals( (String)sourceAssertioncb.getSelectedItem()))
+					{
+						
+						if (!targetTeststep.equals("*"))
+						{	
+							TestStep testStepTrgt = theWorkspace.getProjectByName(targetProject).getTestSuiteByName(targetTestsuite).getTestCaseByName(targetTestcase).getTestStepByName(targetTeststep); 
+							
+							if (!exist(assertion, testStepTrgt))
+							{
+								switch (flavour) { 
+									case "W":
+										((WsdlTestRequestStep)testStepTrgt).cloneAssertion(((WsdlTestRequestStep)testStepSrc).getAssertionAt(count), ((WsdlTestRequestStep)testStepSrc).getAssertionAt(count).getName());					
+										 break;					
+									case "R": 
+										((RestTestRequestStep)testStepTrgt).cloneAssertion(((RestTestRequestStep)testStepSrc).getAssertionAt(count), ((RestTestRequestStep)testStepSrc).getAssertionAt(count).getName());					
+										 break;
+									case "H":
+										((HttpTestRequestStep)testStepTrgt).cloneAssertion(((HttpTestRequestStep)testStepSrc).getAssertionAt(count), ((HttpTestRequestStep)testStepSrc).getAssertionAt(count).getName());					
+										 break;
+								}
+								ergebnis.setText("Ready!");
+							}else {
+								ergebnis.setText("Assertion exists. Not copied!");
+							}
+						}else {
+							TestCase tc = theWorkspace.getProjectByName(targetProject).getTestSuiteByName(targetTestsuite).getTestCaseByName(targetTestcase);
+							ergebnis.setText("multi-copy" );
+							int cpy_anz = 0;
+							for( int i = 0; i < tc.getTestStepList().size(); i++ )    
+							{   
+								ergebnis.setText("multi-copy: " + i );
+								
+									if (tc.getTestStepList().get(i) instanceof WsdlTestRequestStep && flavour == "W") {
+										if (!exist(assertion, tc.getTestStepList().get(i) )) {											
+											((WsdlTestRequestStep)tc.getTestStepList().get(i)).cloneAssertion(((WsdlTestRequestStep)testStepSrc).getAssertionAt(count), ((WsdlTestRequestStep)testStepSrc).getAssertionAt(count).getName());
+											cpy_anz++;
+										}	
+									}	
+									if (tc.getTestStepList().get(i) instanceof RestTestRequestStep && flavour == "R") {
+										if (!exist(assertion, tc.getTestStepList().get(i) )) {											
+											((RestTestRequestStep)tc.getTestStepList().get(i)).cloneAssertion(((RestTestRequestStep)testStepSrc).getAssertionAt(count), ((RestTestRequestStep)testStepSrc).getAssertionAt(count).getName());
+											cpy_anz++;
+										}
+									}
+									if (tc.getTestStepList().get(i) instanceof HttpTestRequestStep && flavour == "H") {
+										if (!exist(assertion, tc.getTestStepList().get(i) )) {
+											((HttpTestRequestStep)tc.getTestStepList().get(i)).cloneAssertion(((HttpTestRequestStep)testStepSrc).getAssertionAt(count), ((HttpTestRequestStep)testStepSrc).getAssertionAt(count).getName());
+											cpy_anz++;
+										}
+									}
+								
+							} 
+							ergebnis.setText("Copied " + cpy_anz + " times" );
+						}
+					}	
+				}
+									
+			}
 		
-		
-		
+		});
+	
 		
 		setLayout(new GridBagLayout());
 		GridBagConstraints c = new GridBagConstraints();
 		c.fill = GridBagConstraints.HORIZONTAL;
 		
-		c.gridx = 0;		c.gridy = 0;		add(new Label("Source"),c);			
+		c.gridx = 0;		c.gridy = 0;		add(new Label("Source"),c);			c.gridx = 1;		c.gridy = 0;		add(new Label("-----------------------------"),c);			
 		c.gridx = 0;		c.gridy = 1;		add(new Label("Project"),c);		c.gridx = 1;		c.gridy = 1;		add(new Label(sourceProject),c);
 		c.gridx = 0;		c.gridy = 2;		add(new Label("TestSuite"),c);		c.gridx = 1;		c.gridy = 2;		add(new Label(sourceTestsuite),c);
 		c.gridx = 0;		c.gridy = 3;		add(new Label("TestCase"),c);		c.gridx = 1;		c.gridy = 3;		add(new Label(sourceTestcase),c); 
@@ -330,62 +425,51 @@ public class CopyAssertion extends JPanel {
 		c.gridx = 0;		c.gridy = 5;		add(new Label("Assertion"),c);		c.gridx = 1;		c.gridy = 5;		add(sourceAssertioncb,c); 
 		c.gridx = 0;		c.gridy = 6;		add(new Label(" "),c);				c.gridx = 1;		c.gridy = 6;		add(new Label(" "),c); 
 
-		c.gridx = 0;		c.gridy = 7;		add(new Label("Target"),c);					
+		c.gridx = 0;		c.gridy = 7;		add(new Label("Target"),c);			c.gridx = 1;		c.gridy = 7;		add(new Label("-----------------------------"),c);		
 		c.gridx = 0;		c.gridy = 8;		add(new Label("Project"),c);		c.gridx = 1;		c.gridy = 8;		add(projectcb,c);
 		c.gridx = 0;		c.gridy = 9;		add(new Label("TestSuite"),c);		c.gridx = 1;		c.gridy = 9;		add(testsuitecb,c);
 		c.gridx = 0;		c.gridy = 10;		add(new Label("TestCase"),c);		c.gridx = 1;		c.gridy = 10;		add(testcasecb,c); 
 		c.gridx = 0;		c.gridy = 11;		add(new Label("TestStep"),c);		c.gridx = 1;		c.gridy = 11;		add(teststepcb,c); 
 		
-		c.gridx = 0;		c.gridy = 12;		add(new Label(" "),c);				c.gridx = 1;		c.gridy = 12;		add(new Label(" "),c); 
-
-		Button button = new Button("Copy");
-		button.addActionListener(new ActionListener() 
-		{
-			public void actionPerformed(ActionEvent e)         
-			{
-				WsdlTestRequestStep testStepSrc = (WsdlTestRequestStep) theWorkspace.getProjectByName(sourceProject).getTestSuiteByName(sourceTestsuite).getTestCaseByName(sourceTestcase).getTestStepByName(sourceTeststep); 				
-				WsdlTestRequestStep testStepTrgt =(WsdlTestRequestStep) theWorkspace.getProjectByName(targetProject).getTestSuiteByName(targetTestsuite).getTestCaseByName(targetTestcase).getTestStepByName(targetTeststep); 
-				
-				int counter = testStepSrc.getAssertionList().size();
-				for (int count = 0; count < counter; count++) {
-					String assertion = testStepSrc.getAssertionAt(count).getName();
-					if ( assertion.equals( (String)sourceAssertioncb.getSelectedItem()))
-					{					
-						if (!exist(assertion, testStepTrgt))
-						{
-							testStepTrgt.cloneAssertion(testStepSrc.getAssertionAt(count), testStepSrc.getAssertionAt(count).getName());					
-							ergebnis.setText("Ready!");
-						}else {
-							ergebnis.setText("Assertion exists. Not copied!");
-						}
-					}	
-				}
-			}
-			
-		});
-		c.gridx = 1;		c.gridy = 13;		add(button,c);	 
-		
-		c.gridx = 0;		c.gridy = 14;		add(new Label("Ergebnis"),c);				c.gridx = 1;		c.gridy = 14;		add(ergebnis,c); 
-
+		c.gridx = 0;		c.gridy = 12;		add(new Label(" "),c);				c.gridx = 1;		c.gridy = 12;		add(new Label(" "),c);
+		c.gridx = 1;		c.gridy = 13;		add(button,c);	 		
+		c.gridx = 0;		c.gridy = 14;		add(new Label("Result"),c);			c.gridx = 1;		c.gridy = 14;		add(ergebnis,c); 
 		
 		setBorder(BorderFactory.createEmptyBorder(20,20,20,20));  
-		
 		
 	} 
 	
 	
-	private boolean exist(String assertion, WsdlTestRequestStep testStepTrgt) 
+	private boolean exist(String assertion, TestStep testStepTrgt) 
 	{
-		int counter = testStepTrgt.getAssertionList().size();
+		int counter = 0;
+		switch (flavour) { 
+			case "W":
+				counter = ((WsdlTestRequestStep)testStepTrgt).getAssertionList().size(); break;
+			case "R":
+				counter = ((RestTestRequestStep)testStepTrgt).getAssertionList().size(); break;
+			case "H":
+				counter = ((HttpTestRequestStep)testStepTrgt).getAssertionList().size(); break;
+		}
 		for (int count = 0; count < counter; count++) {
-			String listAssertion = testStepTrgt.getAssertionAt(count).getName();
+			String listAssertion = "";
+			switch (flavour) { 
+				case "W":
+					listAssertion = ((WsdlTestRequestStep)testStepTrgt).getAssertionAt(count).getName(); break;					
+				case "R": 
+					listAssertion = ((RestTestRequestStep)testStepTrgt).getAssertionAt(count).getName(); break;
+				case "H":
+					listAssertion = ((HttpTestRequestStep)testStepTrgt).getAssertionAt(count).getName(); break;
+			}	
 			if (listAssertion.equals(assertion))
 			{
 				return true;
 			}				
-		}
+			
+		}		
 		return false;
 	}
+	
 	
 	
 } 
